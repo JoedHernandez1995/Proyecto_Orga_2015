@@ -64,7 +64,8 @@ int main(int argc, char*argv[]){
 				campos.push_back(camp);
 				cout << "Campo Creado!"<<endl;
 			}
-
+			
+			/*Guardar estructura en un archivo aparte*/
 			ofstream file("estructura.bin",ios::binary);
 			const char* pointer = reinterpret_cast<const char*>(&campos[0]);
 			size_t bytes = campos.size() * sizeof(campos[0]);
