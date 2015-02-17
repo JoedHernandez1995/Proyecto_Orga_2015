@@ -196,7 +196,7 @@ int main(int argc, char*argv[]){
 					}
 					cout << endl;
 				}
-				
+
 				/*Escribir al Archivo*/
 				ofstream file2("registros.bin",ios::binary| ios::in|ios::out);
 				file2.seekp(offset,ios::beg);
@@ -279,10 +279,65 @@ int main(int argc, char*argv[]){
 		}
 
 		if(opcion == 9){
+			if(registros.size() == 0){
+				cout << "No hay registros, cargue un archivo de registros!!"<<endl;
+			}else{
+				string texto;
+				int valor,tipo;
+				cout << "Ingrese el tipo por el que le gustaria buscar(1-Valor/2-Texto): ";
+				cin >> tipo;
+				if(tipo == 1){
 
-			
+					cout << "Ingrese un valor para buscar en los registros: ";
+					cin >> valor;
 
+					int control = 0;
+					for(int i = 0; i < registros.size(); i++){
+						cout << endl;
+						for(int j = 0; j < registros.at(i).informacion.size(); j++){
+							if(registros.at(i).informacion.at(j).value == valor){
+								while(control < campos.size()){
+									cout << registros.at(i).estructura.at(control).nombre << ": ";
+									if(registros.at(i).estructura.at(control).tipo == 1){
+										cout << registros.at(i).informacion.at(control).value;
+									}
+									if(registros.at(i).estructura.at(control).tipo == 2){
+										cout << registros.at(i).informacion.at(control).texto;
+									}
+									control++;
+									cout << endl;
+								}
+							}
+						}
+					}
 
+				}else if(tipo == 2){
+
+					cout << "Ingrese texto para buscar en los registros: ";
+					cin >> texto;
+
+					int control = 0;
+					cout << endl;
+					for(int i = 0; i < registros.size(); i++){
+						for(int j = 0; j < registros.at(i).informacion.size(); j++){
+							if(registros.at(i).informacion.at(j).texto == texto){
+								while(control < campos.size()){
+									cout << registros.at(i).estructura.at(control).nombre << ": ";
+									if(registros.at(i).estructura.at(control).tipo == 1){
+										cout << registros.at(i).informacion.at(control).value;
+									}
+									if(registros.at(i).estructura.at(control).tipo == 2){
+										cout << registros.at(i).informacion.at(control).texto;
+									}
+									control++;
+									cout << endl;
+								}
+							}
+						}
+					}
+					cout << endl;
+				}
+			}
 		}
 
 		if(opcion == 10){
