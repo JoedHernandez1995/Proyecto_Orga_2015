@@ -356,8 +356,8 @@ int menu(){
 	cout << "5 - Cargar" << endl;
 	cout << "6 - Modificar Registro"<<endl;
 	cout << "7 - Borrar Registro"<<endl;
-	cout << "8 - Buscar"<<endl;
-	cout << "9 - Compactar"<<endl;
+	cout << "8 - Compactar"<<endl;
+	cout << "9 - Buscar"<<endl;
 	cout << "10 - Salir" << endl;
 	cout << "Ingrese opcion: ";
 	cin >> opcion;
