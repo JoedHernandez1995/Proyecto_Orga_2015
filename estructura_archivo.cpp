@@ -4,6 +4,8 @@
 #include <iomanip>
 #include <fstream>
 #include <string>
+#include <map>
+#include "primaryKey.h"
 
 using namespace std;
 
@@ -11,6 +13,7 @@ struct Campo{
 	char nombre[20];
 	int tipo;
 	int longitud;
+	bool isKey;
 };
 
 struct Informacion{
@@ -23,19 +26,20 @@ struct Registro{
 	vector<Informacion> informacion;
 };
 
-int menu();
-void imprimirRegistros(vector<Registro>);
-void salvarArchivo(vector<Campo>,vector<Registro>);
 
-/* Estos dos metodos, cargan el contenido de los archivos 
-a memoria con el fin de poder visualizar el contenido de 
-los archivos */
-vector<Campo> cargarEstructura();
-vector<Registro> cargarRegistros(vector<Campo>);
+int menu();
+int menuIndices();
+void cargarIndices(string);
+void imprimir(string);
+int inicioRegistros(string);
+
+vector<Campo> cargarEstructura(string);
+map<string,PrimaryKey*> indice;
 
 int main(int argc, char*argv[]){
 
 	int cantCampos;
+	string filename;
 	vector<Campo> campos;
 	vector<Informacion> info;
 	vector<Registro> registros;
@@ -43,6 +47,9 @@ int main(int argc, char*argv[]){
 	stack<int> availList;
 
 	bool continuar = true;
+	cout << "Ingrese el nombre del archivo: ";
+	cin >> filename;
+	filename += ".bin";
 	while(continuar){
 		int opcion = menu();
 
@@ -53,29 +60,41 @@ int main(int argc, char*argv[]){
 				Campo camp;
 				cout << "Ingrese nombre del campo: ";
 				cin >> camp.nombre;
-				cout << "Ingrese tipo del campo(1-Int/2-Texto): ";
-				cin >> camp.tipo;
-				if(camp.tipo == 2){
-					cout << "Ingrese longitud del texto: ";
-					cin >> camp.longitud;
+				cout << "Es llave primaria(1-Si/0-No): ";
+				cin >> camp.isKey;
+				if(!camp.isKey){
+					cout << "Ingrese tipo del campo(1-Int/2-Texto): ";
+					cin >> camp.tipo;
+					if(camp.tipo == 2){
+						cout << "Ingrese longitud del texto: ";
+						cin >> camp.longitud;
+					} else {
+						camp.longitud = sizeof(int);
+					}
 				} else {
-					camp.longitud = sizeof(int);
+					camp.tipo = 2;
+					cout << "Ingrese longitud de la llave: ";
+					cin >> camp.longitud;
 				}
 				campos.push_back(camp);
 				cout << "Campo Creado!"<<endl;
 			}
-			
-			/*Guardar estructura en un archivo aparte*/
-			ofstream file("estructura.bin",ios::binary);
-			const char* pointer = reinterpret_cast<const char*>(&campos[0]);
+
+			/* Crea el encabezado del archivo */
+			ofstream file(filename,ios::binary|ios::app);
+			file.write(reinterpret_cast<const char*>(&cantCampos),sizeof(cantCampos)); //Guarda el numero de campos en el encabezado
+			const char* pointer = reinterpret_cast<const char*>(&campos[0]);//Guarda la lista de campos con su respectiva informacion
 			size_t bytes = campos.size() * sizeof(campos[0]);
 			file.write(pointer, bytes);
+			file.close();
+
 			cout << endl;
 			cout << "Estructura Guardada!!"<<endl;
 		}
 
 		if(opcion == 2){
-			if(availList.size() == 0){
+			/*Revisar el availlist */
+			if(availList.size() == 0){ //Si el availist esta vacio
 				info.clear();
 				string text;
 				int data;
@@ -100,14 +119,15 @@ int main(int argc, char*argv[]){
 					}
 				}
 				/*Escribe al final del archivo*/
-				ofstream file2("registros.bin",ios::binary| ios_base::app);
+				ofstream file2(filename,ios::binary| ios_base::app);
 				const char* puntero = reinterpret_cast<const char*>(&info[0]);
 				size_t cantBytes = info.size() * sizeof(info[0]);
 				file2.write(puntero,cantBytes);
 				cout << "Registro Agregado"<<endl;
 				info.clear();
 				file2.close();
-			}else{
+				
+			}else{ // Si hay posiciones disponibles
 				info.clear();
 				string text;
 				int data;
@@ -132,8 +152,9 @@ int main(int argc, char*argv[]){
 					}
 				}
 				int rrn = availList.top();
-				int offset = (rrn-1)*campos.size()*sizeof(Informacion);
-				ofstream file2("registros.bin",ios::binary| ios::in|ios::out);
+				int offset = inicioRegistros(filename);
+				offset += (rrn-1)*campos.size()*sizeof(Informacion);
+				ofstream file2(filename,ios::binary| ios::in|ios::out);
 				file2.seekp(offset,ios::beg);
 				const char* puntero = reinterpret_cast<const char*>(&info[0]);
 				size_t cantBytes = info.size() * sizeof(info[0]);
@@ -145,77 +166,75 @@ int main(int argc, char*argv[]){
 		}
 
 		if(opcion == 3){
-			imprimirRegistros(registros);
+			imprimir(filename);
 		}
 
 		if(opcion == 4){
-			salvarArchivo(campos,registros);
+			cout << "Ingrese el nombre del archivo que quiere abrir: ";
+			cin >> filename;
+			campos = cargarEstructura(filename);
+			cargarIndices(filename);
+			cout << "Archivo abierto"<<endl<<endl;
 		}
 
 		if(opcion == 5){
-			campos = cargarEstructura();
-			registros = cargarRegistros(campos);
+			int rrn = 0;
+			int offset = inicioRegistros(filename);
+			imprimir(filename);
+			cout << "Ingrese el numero de registro que quiere modificar: ";
+			cin >> rrn;
+			offset += (rrn-1)*campos.size()*sizeof(Informacion);
+
+				/*Leer del Archivo*/
+			ifstream file(filename,ios::binary |ios::in |ios::out);
+			file.seekg(offset,ios::beg);
+			vector<Informacion> infoRegistro;
+			Informacion data;
+			int control = 1;
+			while(true){
+				if(control < campos.size()){
+					if(file.read(reinterpret_cast<char*>(&data),sizeof(data))){
+						infoRegistro.push_back(data);
+						control++;
+					} 
+				} else if(control == campos.size()){
+					break;
+				}
+			}
+			file.close();
+
+				/*Modificar Datos*/
+			for(int i = 0; i < campos.size(); i++){
+				for(int j = 0; j < infoRegistro.size(); j++){
+					cout << campos.at(i).nombre << ": ";
+					if(campos.at(i).tipo == 1){
+						cin >> infoRegistro.at(j).value;
+					}
+					if(campos.at(i).tipo == 2){
+						cin >> infoRegistro.at(j).texto;
+					}
+				}
+				cout << endl;
+			}
+
+				/*Escribir al Archivo*/
+			ofstream file2(filename,ios::binary| ios::in|ios::out);
+			file2.seekp(offset,ios::beg);
+			const char* puntero = reinterpret_cast<const char*>(&infoRegistro[0]);
+			size_t cantBytes = infoRegistro.size() * sizeof(infoRegistro[0]);
+			file2.write(puntero,cantBytes);
+			file2.close();
+			cout << "Registro modificado!!"<<endl<<endl;
 		}
 
 		if(opcion == 6){
-			if(!(registros.size()==0)){
-				int rrn = 0;
-				int offset = 0;
-				imprimirRegistros(registros);
-				cout << "Ingrese el numero de registro que quiere modificar: ";
-				cin >> rrn;
-				offset = (rrn-1)*campos.size()*sizeof(Informacion);
-
-				/*Leer del Archivo*/
-				ifstream file("registros.bin",ios::binary |ios::in |ios::out);
-				file.seekg(offset,ios::beg);
-				vector<Informacion> infoRegistro;
-				Informacion data;
-				int control = 1;
-				while(true){
-					if(control < campos.size()){
-						if(file.read(reinterpret_cast<char*>(&data),sizeof(data))){
-							infoRegistro.push_back(data);
-							control++;
-						} 
-					} else if(control == campos.size()){
-						break;
-					}
-				}
-				file.close();
-
-				/*Modificar Datos*/
-				for(int i = 0; i < campos.size(); i++){
-					for(int j = 0; j < infoRegistro.size(); j++){
-						cout << campos.at(i).nombre << ": ";
-						if(campos.at(i).tipo == 1){
-							cin >> infoRegistro.at(j).value;
-						}
-						if(campos.at(i).tipo == 2){
-							cin >> infoRegistro.at(j).texto;
-						}
-					}
-					cout << endl;
-				}
-
-				/*Escribir al Archivo*/
-				ofstream file2("registros.bin",ios::binary| ios::in|ios::out);
-				file2.seekp(offset,ios::beg);
-				const char* puntero = reinterpret_cast<const char*>(&infoRegistro[0]);
-				size_t cantBytes = infoRegistro.size() * sizeof(infoRegistro[0]);
-				file2.write(puntero,cantBytes);
-				file2.close();
-				cout << "Registro modificado!!"<<endl<<endl;
-			}
-		}
-
-		if(opcion == 7){
-			int rrn,offset;
-			imprimirRegistros(registros);
+			int rrn;
+			imprimir(filename);
 			cout << "Ingrese el numero de registro que quiere borrar: ";
 			cin >> rrn;
-			offset = (rrn-1)*campos.size()*sizeof(Informacion);
-			ofstream out("registros.bin", ios::in|ios::binary);
+			int offset = inicioRegistros(filename);
+			offset += (rrn-1)*campos.size()*sizeof(Informacion);
+			ofstream out(filename, ios::in|ios::binary);
 			out.seekp(offset,ios::beg);
 			out.put('&');
 			out.close();
@@ -223,15 +242,15 @@ int main(int argc, char*argv[]){
 			cout << "Registro borrado"<<endl;
 		}
 
-		if(opcion == 8){
+		if(opcion == 7){
 
 			/*Cargamos registros no marcados a memoria*/
 			int begin,end,size;
-			int rrn = 0;
+			int rrn = inicioRegistros(filename);
 			int offset = 0;
 
 							/*Leer del Archivo*/
-			ifstream file("registros.bin",ios::binary |ios::in |ios::out);
+			ifstream file(filename,ios::binary |ios::in |ios::out);
 			begin = file.tellg();
 			file.seekg(0,ios::end);
 			end = file.tellg();
@@ -248,14 +267,13 @@ int main(int argc, char*argv[]){
 			while(true){
 				cout << rrn << endl;
 				if(rrn<numData){
-					offset = rrn*sizeof(Informacion);
+					offset += rrn*sizeof(Informacion);
 					char c;
 					file.seekg(offset,ios::beg);
 					file.get(c);
 					if(c != '&'){
 						if(file.read(reinterpret_cast<char*>(&data),sizeof(data))) {
 							infoRegistro.push_back(data);
-							cout << "Hola"<<endl;
 						}
 						rrn++;
 					}else{
@@ -269,7 +287,7 @@ int main(int argc, char*argv[]){
 			cout << infoRegistro.size() << endl;
 
 			/* Escribir Archivo Nuevo */
-			ofstream file2("registros2.bin",ios::binary);
+			ofstream file2(filename,ios::binary);
 			const char* puntero = reinterpret_cast<const char*>(&infoRegistro[0]);
 			size_t cantBytes = infoRegistro.size() * sizeof(infoRegistro[0]);
 			file2.write(puntero,cantBytes);
@@ -279,7 +297,7 @@ int main(int argc, char*argv[]){
 
 		}
 
-		if(opcion == 9){
+		if(opcion == 8){
 			if(registros.size() == 0){
 				cout << "No hay registros, cargue un archivo de registros!!"<<endl;
 			}else{
@@ -341,6 +359,217 @@ int main(int argc, char*argv[]){
 			}
 		}
 
+		if(opcion == 9){
+			bool seguir = true;
+			while(seguir){
+				int option = menuIndices();
+				if(option == 1){
+
+					string key;
+					int start;
+					ofstream file(filename,ios::binary| ios_base::app);
+					ofstream file2(filename,ios::binary| ios::in|ios::out);
+
+					/*Revisar el availlist */
+					if(availList.size() == 0){ //Si el availist esta vacio
+						info.clear();
+						string text;
+						int data;
+						for(int i = 0; i < campos.size(); i++){
+							Informacion temp;
+							if(campos.at(i).tipo == 1){
+								cout << campos.at(i).nombre << ": ";
+								cin >> temp.value;
+								temp.texto = "";
+								info.push_back(temp);
+							}
+							if(campos.at(i).tipo == 2){
+								cout << campos.at(i).nombre << ": ";
+								cin >> temp.texto;
+								if(temp.texto.size() < campos.at(i).longitud){
+									for(int j = temp.texto.size(); j < campos.at(i).longitud; j++){
+										temp.texto += '-';
+									}
+								}
+								if(campos.at(i).isKey){
+									key = temp.texto;
+								}
+								temp.value = 0;
+								info.push_back(temp);
+							}
+						}
+						/*Escribe al final del archivo*/
+						const char* puntero = reinterpret_cast<const char*>(&info[0]);
+						size_t cantBytes = info.size() * sizeof(info[0]);
+						file.write(puntero,cantBytes);
+						start = ((int)file.tellp()) - (campos.size()*sizeof(Informacion));//probablemente sumarle 1
+						indice.insert(pair<string,PrimaryKey*>(key,new PrimaryKey(key,start)));
+						info.clear();
+						
+					}else{ // Si hay posiciones disponibles
+						info.clear();
+						string text;
+						int data;
+						for(int i = 0; i < campos.size(); i++){
+							Informacion temp;
+							if(campos.at(i).tipo == 1){
+								cout << campos.at(i).nombre << ": ";
+								cin >> temp.value;
+								temp.texto = "";
+								info.push_back(temp);
+							}
+							if(campos.at(i).tipo == 2){
+								cout << campos.at(i).nombre << ": ";
+								cin >> temp.texto;
+								if(temp.texto.size() < campos.at(i).longitud){
+									for(int j = temp.texto.size(); j < campos.at(i).longitud; j++){
+										temp.texto += '-';
+									}
+								}
+								if(campos.at(i).isKey){
+									key = temp.texto;
+								}
+								temp.value = 0;
+								info.push_back(temp);
+							}
+						}
+						int rrn = availList.top();
+						int offset = inicioRegistros(filename);
+						offset += (rrn-1)*campos.size()*sizeof(Informacion);
+						file2.seekp(offset,ios::beg);
+						const char* puntero = reinterpret_cast<const char*>(&info[0]);
+						size_t cantBytes = info.size() * sizeof(info[0]);
+						file2.write(puntero,cantBytes);
+						availList.pop();
+						start = ((int)file2.tellp())-(campos.size()*sizeof(Informacion)); //posiblemente sumarle 1
+						indice.insert(pair<string,PrimaryKey*>(key,new PrimaryKey(key,start)));
+					}
+					file.close();
+					file2.close();
+
+				}
+				if(option == 2){
+					int rrn;
+					int control = 0;
+					string llave1,llave2;
+					imprimir(filename);
+					cout << "Ingrese el numero de registro que quiere modificar: ";
+					cin >> rrn;
+					int offset = inicioRegistros(filename);
+					offset += (rrn-1)*campos.size()*sizeof(Informacion);
+					ifstream in(filename,ios::binary);
+					in.seekg(offset,ios::beg);
+					Informacion data;
+					vector<Informacion> info;
+					while(true){
+						if(control < campos.size()){
+							in.read(reinterpret_cast<char*>(&data),sizeof(data));
+							cout << campos.at(control).nombre<<": ";
+							if(campos.at(control).isKey){
+								llave1 = data.texto;
+							}
+							if(campos.at(control).tipo==1){
+								cin >> data.value;
+							}else{
+								cin >> data.texto;
+								if(campos.at(control).isKey){
+									llave2 = data.texto;
+								}
+							}
+							info.push_back(data);
+						} else if(control == campos.size()){
+							break;
+						}
+						control++;
+					}
+					indice.erase(llave1);
+					ofstream out(filename,ios::binary|ios::in|ios::out);
+					out.seekp(offset,ios::beg);
+					indice.insert(pair<string,PrimaryKey*>(llave2,new PrimaryKey(llave2,offset)));
+					out.write(reinterpret_cast<char*>(&info[0]),info.size()*sizeof(info[0]));
+					out.close();
+					in.close();
+				}
+
+				if(option == 3){
+					int rrn;
+					imprimir(filename);
+					cout << "Ingrese el numero de registro que quiere borrar: ";
+					cin >> rrn;
+					int offset = inicioRegistros(filename);
+					offset += (rrn-1)*campos.size()*sizeof(Informacion);
+					ofstream out(filename, ios::in|ios::binary);
+					out.seekp(offset,ios::beg);
+
+					ifstream in(filename,ios::binary);
+					in.seekg(offset,ios::beg);
+					int control = 0;
+					string key;
+					Informacion data;
+					while(true){
+						if(control < campos.size()){
+							in.read(reinterpret_cast<char*>(&data),sizeof(data));
+							if(campos.at(control).isKey){
+								key = data.texto;
+							}
+						}else if(control == campos.size()){
+							break;
+						}
+						control++;
+					}
+					out.put('&');
+					out.close();
+					in.close();
+					availList.push(rrn);
+					indice.erase(key);
+					cout << "Registro borrado"<<endl;
+					imprimir(filename);
+				}
+				if(option == 4){
+					string llave;
+					cout << "Ingrese la llave para buscar: ";
+					cin >> llave;
+					PrimaryKey* key = indice.find(llave)->second;
+					int offset = key->getOffset();
+
+					ifstream file(filename,ios::binary);
+					file.seekg(offset,ios::beg);
+					int control = 1;
+					Informacion data;
+					cout << endl;
+					while(true){
+						if(control < campos.size()){
+							file.read(reinterpret_cast<char*>(&data),sizeof(data));
+							cout << campos.at(control-1).nombre << ": ";
+							if(campos.at(control-1).tipo == 1){
+								cout << data.value;
+							} else {
+								cout << data.texto;
+							}
+						} else if(control == campos.size()) {
+							file.read(reinterpret_cast<char*>(&data),sizeof(data));
+							cout << campos.at(control-1).nombre << ": ";
+							if(campos.at(control-1).tipo == 1){
+								cout << data.value;
+							} else {
+								cout << data.texto;
+							}
+							cout << endl;
+							break;
+						}
+						control++;
+						cout << endl;
+					}
+					cout << endl;
+
+				}
+				if(option == 5){
+					seguir = false;
+				}
+			}
+
+		}
+
 		if(opcion == 10){
 			continuar = false;
 		}
@@ -353,102 +582,132 @@ int menu(){
 	cout << "1 - Crear Estructura de Archivo" << endl;
 	cout << "2 - Agregar Registros" << endl;
 	cout << "3 - Listar" << endl;
-	cout << "4 - Guardar" << endl;
-	cout << "5 - Cargar" << endl;
-	cout << "6 - Modificar Registro"<<endl;
-	cout << "7 - Borrar Registro"<<endl;
-	cout << "8 - Compactar"<<endl;
-	cout << "9 - Buscar"<<endl;
-	cout << "10 - Salir" << endl;
+	cout << "4 - Abrir un Archivo" << endl;
+	cout << "5 - Modificar Registro"<<endl;
+	cout << "6 - Borrar Registro"<<endl;
+	cout << "7 - Compactar"<<endl;
+	cout << "8 - Buscar"<<endl;
+	cout << "9 - Usar Indice Lineal" << endl;
+	cout << "10 - Salir"<<endl;
 	cout << "Ingrese opcion: ";
 	cin >> opcion;
 	return opcion;
 }
 
-void imprimirRegistros(vector<Registro> registros){
-	cout << endl;
-	for(int i = 0; i < registros.size(); i++){
-		cout << "Registro #"<<i+1<<endl;
-		for(int j = 0; j < registros.at(i).estructura.size(); j++){
-			cout << registros.at(i).estructura.at(j).nombre<<": ";
-			if(registros.at(i).estructura.at(j).tipo == 1){
-				cout << registros.at(i).informacion.at(j).value << endl;
-			}
-			if(registros.at(i).estructura.at(j).tipo == 2){
-				cout << registros.at(i).informacion.at(j).texto << endl;
-			}
-		}
-		cout << endl;
-	}
+int menuIndices(){
+	int opcion;
+	cout << "1 - Agregar registro usando Indice Lineal"<<endl;
+	cout << "2 - Modificar registro usando Indice Lineal"<<endl;
+	cout << "3 - Eliminar Registro usando Indice Lineal"<<endl;
+	cout << "4 - Buscar usando indice Lineal"<<endl;
+	cout << "5 - Desactivar indice lineal"<<endl;
+	cout << "Ingrese opcion: ";
+	cin >> opcion;
+	return opcion;
 }
 
-void salvarArchivo(vector<Campo> campos, vector<Registro> registros){
-	ofstream file("estructura.bin",ios::binary);
-	//ofstream file2("registros.bin",ios::binary);
-	const char* pointer = reinterpret_cast<const char*>(&campos[0]);
-	size_t bytes = campos.size() * sizeof(campos[0]);
-	file.write(pointer, bytes);
+void cargarIndices(string filename){
 	cout << endl;
-	cout << "Estructura Guardada!!"<<endl;
+	ifstream file(filename,ios::binary);
 
-	/*
-	for(int i = 0; i < registros.size(); i++){
-		const char* puntero = reinterpret_cast<const char*>(&registros.at(i).informacion[0]);
-		size_t cantBytes = registros.at(i).informacion.size() * sizeof(registros.at(i).informacion[0]);
-		file2.write(puntero,cantBytes);
-	}
-	*/
+	int offset = inicioRegistros(filename);
+	file.seekg(offset,ios::beg);
 
-	file.close();
-	//file2.close();
-	cout << endl;
-	//cout << "Registros Guardados!"<<endl;
-	//cout << endl;
-}
-
-vector<Campo> cargarEstructura(){
-	vector<Campo> campos;
-	ifstream file("estructura.bin",ios::binary);
-	Campo camp;
-	while(true){
-		if(file.read(reinterpret_cast<char*>(&camp), sizeof(camp))){
-			campos.push_back(camp);
-		} else {
-			break;
-		}
-	}
-	file.close();
-	cout << "Estructura Cargada!"<<endl;
-	cout << campos.size()<<endl; 
-	return campos;
-}
-
-vector<Registro> cargarRegistros(vector<Campo> campos){
-	ifstream file2("registros.bin",ios::binary);
-	vector<Registro> registros;
 	vector<Informacion> info;
+	vector<Campo> campos = cargarEstructura(filename); 
 	Informacion info1;
 	int control = 1;
+	int start = -1;
 	while(true){
 		if(control <= campos.size()){
-			if(file2.read(reinterpret_cast<char*>(&info1),sizeof(info1))){
+			if(control == 1){
+				start = file.tellg();
+			}
+			if(file.read(reinterpret_cast<char*>(&info1),sizeof(info1))){
+				info.push_back(info1);
+				if(campos.at(control-1).isKey){
+					indice.insert(pair<string,PrimaryKey*>(info.at(control-1).texto,new PrimaryKey(info.at(control-1).texto,start)));
+				}
+				control++;
+			} else {
+				break;
+			}
+		} else if(control > campos.size()){
+			info.clear();
+			control = 1;
+		}
+	}
+	file.close();
+}
+
+void imprimir(string filename){
+	cout << endl;
+	ifstream file(filename,ios::binary);
+
+	int offset = inicioRegistros(filename);
+	file.seekg(offset,ios::beg);
+
+	vector<Informacion> info;
+	vector<Campo> campos = cargarEstructura(filename); 
+	Informacion info1;
+	int control = 1;
+	int numReg = 1;
+	while(true){
+		if(control <= campos.size()){
+			if(file.read(reinterpret_cast<char*>(&info1),sizeof(info1))){
 				info.push_back(info1);
 				control++;
 			} else {
 				break;
 			}
 		} else if(control > campos.size()){
-			Registro record;
-			record.estructura = campos;
-			record.informacion = info;
-			registros.push_back(record);
+			cout << "Registro #"<<numReg<<endl;
+			for(int i = 0; i < campos.size(); i++){
+				cout << campos.at(i).nombre<<": ";
+				if(campos.at(i).tipo == 1){
+					cout << info.at(i).value;
+				}else if(campos.at(i).tipo == 2){
+					cout << info.at(i).texto;
+				}
+				cout << endl;
+			}
+			cout << endl;
 			info.clear();
 			control = 1;
+			numReg++;
 		}
 	}
-	file2.close();
-	cout << "Registros Cargados!" << endl;
-	cout << registros.size() << endl;
-	return registros;
+	file.close();
+	for (map<string,PrimaryKey*>::iterator it=indice.begin(); it!=indice.end(); it++)
+	    cout << it->first << " => " << it->second->getOffset() << '\n';
+}
 
+vector<Campo> cargarEstructura(string filename){
+	vector<Campo> campos;
+	ifstream file(filename,ios::binary|ios::in);
+	Campo camp;
+	int cantCampos = 0;
+	int offset = 0;
+
+	file.read(reinterpret_cast<char*>(&cantCampos),sizeof(int));
+	offset += sizeof(int);
+	file.seekg(offset,ios::beg);
+
+	int max = sizeof(int) + (cantCampos * sizeof(Campo));
+
+	while(offset < max){
+		file.read(reinterpret_cast<char*>(&camp), sizeof(camp));
+		campos.push_back(camp);
+		offset += sizeof(Campo);
+	}
+	return campos;
+}
+
+
+int inicioRegistros(string filename){
+	ifstream file(filename,ios::binary|ios::in);
+	int cantCampos = 0;
+	file.read(reinterpret_cast<char*>(&cantCampos),sizeof(cantCampos));
+	int offset = sizeof(int)+(cantCampos*sizeof(Campo));
+	return offset;
 }
