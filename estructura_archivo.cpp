@@ -29,8 +29,8 @@ struct Registro{
 
 int menu();
 int menuIndices();
-void imprimirRegistros(string);
-void salvarArchivo(vector<Campo>,vector<Registro>);
+void cargarIndices(string);
+void imprimir(string);
 int inicioRegistros(string);
 
 vector<Campo> cargarEstructura(string);
@@ -166,20 +166,21 @@ int main(int argc, char*argv[]){
 		}
 
 		if(opcion == 3){
-			imprimirRegistros(filename);
+			imprimir(filename);
 		}
 
 		if(opcion == 4){
 			cout << "Ingrese el nombre del archivo que quiere abrir: ";
 			cin >> filename;
 			campos = cargarEstructura(filename);
-			cout << campos.size();
+			cargarIndices(filename);
+			cout << "Archivo abierto"<<endl<<endl;
 		}
 
 		if(opcion == 5){
 			int rrn = 0;
 			int offset = inicioRegistros(filename);
-			imprimirRegistros(filename);
+			imprimir(filename);
 			cout << "Ingrese el numero de registro que quiere modificar: ";
 			cin >> rrn;
 			offset += (rrn-1)*campos.size()*sizeof(Informacion);
@@ -228,7 +229,7 @@ int main(int argc, char*argv[]){
 
 		if(opcion == 6){
 			int rrn;
-			imprimirRegistros(filename);
+			imprimir(filename);
 			cout << "Ingrese el numero de registro que quiere borrar: ";
 			cin >> rrn;
 			int offset = inicioRegistros(filename);
@@ -450,8 +451,40 @@ int main(int argc, char*argv[]){
 				if(option == 2){
 
 				}
-				if(option == 3){
 
+				if(option == 3){
+					int rrn;
+					imprimir(filename);
+					cout << "Ingrese el numero de registro que quiere borrar: ";
+					cin >> rrn;
+					int offset = inicioRegistros(filename);
+					offset += (rrn-1)*campos.size()*sizeof(Informacion);
+					ofstream out(filename, ios::in|ios::binary);
+					out.seekp(offset,ios::beg);
+
+					ifstream in(filename,ios::binary);
+					in.seekg(offset,ios::beg);
+					int control = 0;
+					string key;
+					Informacion data;
+					while(true){
+						if(control < campos.size()){
+							in.read(reinterpret_cast<char*>(&data),sizeof(data));
+							if(campos.at(control).isKey){
+								key = data.texto;
+							}
+						}else if(control == campos.size()){
+							break;
+						}
+						control++;
+					}
+					out.put('&');
+					out.close();
+					in.close();
+					availList.push(rrn);
+					indice.erase(key);
+					cout << "Registro borrado"<<endl;
+					imprimir(filename);
 				}
 				if(option == 4){
 					string llave;
@@ -534,7 +567,7 @@ int menuIndices(){
 	return opcion;
 }
 
-void imprimirRegistros(string filename){
+void cargarIndices(string filename){
 	cout << endl;
 	ifstream file(filename,ios::binary);
 
@@ -545,7 +578,6 @@ void imprimirRegistros(string filename){
 	vector<Campo> campos = cargarEstructura(filename); 
 	Informacion info1;
 	int control = 1;
-	int numReg = 1;
 	int start = -1;
 	while(true){
 		if(control <= campos.size()){
@@ -562,6 +594,34 @@ void imprimirRegistros(string filename){
 				break;
 			}
 		} else if(control > campos.size()){
+			info.clear();
+			control = 1;
+		}
+	}
+	file.close();
+}
+
+void imprimir(string filename){
+	cout << endl;
+	ifstream file(filename,ios::binary);
+
+	int offset = inicioRegistros(filename);
+	file.seekg(offset,ios::beg);
+
+	vector<Informacion> info;
+	vector<Campo> campos = cargarEstructura(filename); 
+	Informacion info1;
+	int control = 1;
+	int numReg = 1;
+	while(true){
+		if(control <= campos.size()){
+			if(file.read(reinterpret_cast<char*>(&info1),sizeof(info1))){
+				info.push_back(info1);
+				control++;
+			} else {
+				break;
+			}
+		} else if(control > campos.size()){
 			cout << "Registro #"<<numReg<<endl;
 			for(int i = 0; i < campos.size(); i++){
 				cout << campos.at(i).nombre<<": ";
@@ -573,30 +633,15 @@ void imprimirRegistros(string filename){
 				cout << endl;
 			}
 			cout << endl;
-			for(int i = 0; i < campos.size(); i++){
-
-			}
 			info.clear();
 			control = 1;
 			numReg++;
 		}
 	}
+	file.close();
 	for (map<string,PrimaryKey*>::iterator it=indice.begin(); it!=indice.end(); it++)
 	    cout << it->first << " => " << it->second->getOffset() << '\n';
-	file.close();
 }
-
-void salvarArchivo(vector<Campo> campos, vector<Registro> registros){
-	ofstream file("estructura.bin",ios::binary);
-	const char* pointer = reinterpret_cast<const char*>(&campos[0]);
-	size_t bytes = campos.size() * sizeof(campos[0]);
-	file.write(pointer, bytes);
-	cout << endl;
-	cout << "Estructura Guardada!!"<<endl;
-	file.close();
-	cout << endl;
-}
-
 
 vector<Campo> cargarEstructura(string filename){
 	vector<Campo> campos;
@@ -616,7 +661,6 @@ vector<Campo> cargarEstructura(string filename){
 		campos.push_back(camp);
 		offset += sizeof(Campo);
 	}
-	cout << "Archivo Abierto!"<<endl;
 	return campos;
 }
 
