@@ -173,6 +173,7 @@ int main(int argc, char*argv[]){
 			cout << "Ingrese el nombre del archivo que quiere abrir: ";
 			cin >> filename;
 			campos = cargarEstructura(filename);
+			cout << campos.size();
 		}
 
 		if(opcion == 5){
@@ -453,6 +454,41 @@ int main(int argc, char*argv[]){
 
 				}
 				if(option == 4){
+					string llave;
+					cout << "Ingrese la llave para buscar: ";
+					cin >> llave;
+					PrimaryKey* key = indice.find(llave)->second;
+					int offset = key->getOffset();
+
+					ifstream file(filename,ios::binary);
+					file.seekg(offset,ios::beg);
+					int control = 1;
+					Informacion data;
+					cout << endl;
+					while(true){
+						if(control < campos.size()){
+							file.read(reinterpret_cast<char*>(&data),sizeof(data));
+							cout << campos.at(control-1).nombre << ": ";
+							if(campos.at(control-1).tipo == 1){
+								cout << data.value;
+							} else {
+								cout << data.texto;
+							}
+						} else if(control == campos.size()) {
+							file.read(reinterpret_cast<char*>(&data),sizeof(data));
+							cout << campos.at(control-1).nombre << ": ";
+							if(campos.at(control-1).tipo == 1){
+								cout << data.value;
+							} else {
+								cout << data.texto;
+							}
+							cout << endl;
+							break;
+						}
+						control++;
+						cout << endl;
+					}
+					cout << endl;
 
 				}
 				if(option == 5){
