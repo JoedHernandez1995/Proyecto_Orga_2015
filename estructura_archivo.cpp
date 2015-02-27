@@ -449,7 +449,46 @@ int main(int argc, char*argv[]){
 
 				}
 				if(option == 2){
-
+					int rrn;
+					int control = 0;
+					string llave1,llave2;
+					imprimir(filename);
+					cout << "Ingrese el numero de registro que quiere modificar: ";
+					cin >> rrn;
+					int offset = inicioRegistros(filename);
+					offset += (rrn-1)*campos.size()*sizeof(Informacion);
+					ifstream in(filename,ios::binary);
+					in.seekg(offset,ios::beg);
+					Informacion data;
+					vector<Informacion> info;
+					while(true){
+						if(control < campos.size()){
+							in.read(reinterpret_cast<char*>(&data),sizeof(data));
+							cout << campos.at(control).nombre<<": ";
+							if(campos.at(control).isKey){
+								llave1 = data.texto;
+							}
+							if(campos.at(control).tipo==1){
+								cin >> data.value;
+							}else{
+								cin >> data.texto;
+								if(campos.at(control).isKey){
+									llave2 = data.texto;
+								}
+							}
+							info.push_back(data);
+						} else if(control == campos.size()){
+							break;
+						}
+						control++;
+					}
+					indice.erase(llave1);
+					ofstream out(filename,ios::binary|ios::in|ios::out);
+					out.seekp(offset,ios::beg);
+					indice.insert(pair<string,PrimaryKey*>(llave2,new PrimaryKey(llave2,offset)));
+					out.write(reinterpret_cast<char*>(&info[0]),info.size()*sizeof(info[0]));
+					out.close();
+					in.close();
 				}
 
 				if(option == 3){
