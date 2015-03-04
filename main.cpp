@@ -10,7 +10,7 @@
 using namespace std;
 
 struct Campo{
-	char nombre[20];
+	string nombre;
 	int tipo;
 	int longitud;
 	bool isKey;
@@ -31,6 +31,7 @@ int menu();
 int menuIndices();
 void cargarIndices(string);
 void imprimir(string);
+void text2bin(string);
 int inicioRegistros(string);
 vector<int> cargarAvailList(string);
 
@@ -44,7 +45,6 @@ int main(int argc, char*argv[]){
 	vector<Campo> campos;
 	vector<Informacion> info;
 	vector<Registro> registros;
-
 	bool continuar = true;
 	while(continuar){
 		int opcion = menu();
@@ -594,10 +594,16 @@ int main(int argc, char*argv[]){
 			}
 
 		}
-
 		if(opcion == 9){
+			cout << "Ingrese el nombre del archivo de texto: ";
+			cin >> filename;
+			text2bin(filename);
+			cout << "Terminado"<<endl;
+		}
+		if(opcion == 10){
 			continuar = false;
 		}
+
 		filename.clear();
 	}
 	return 0;
@@ -613,7 +619,8 @@ int menu(){
 	cout << "6 - Compactar"<<endl;
 	cout << "7 - Buscar"<<endl;
 	cout << "8 - Usar Indice Lineal" << endl;
-	cout << "9 - Salir"<<endl;
+	cout << "9 - Convertir un archivo de texto a binario"<<endl;
+	cout << "10 - Salir"<<endl;
 	cout << "Ingrese opcion: ";
 	cin >> opcion;
 	return opcion;
@@ -743,7 +750,7 @@ int inicioRegistros(string filename){
 }
 
 vector<int> cargarAvailList(string filename){
-	int first_avail=0,offset,cantCampos;
+	int first_avail=0, offset, cantCampos;
 	vector<int> posiciones;
 	ifstream file(filename,ios::binary|ios::in);
 	file.read(reinterpret_cast<char*>(&cantCampos),sizeof(cantCampos));
@@ -778,4 +785,64 @@ vector<int> cargarAvailList(string filename){
 		return posiciones;
 
 	}
+}
+
+void text2bin(string filename){
+	ifstream in(filename);
+	filename.erase(filename.end()-4,filename.end());
+	string outputFile = filename+".bin";
+	ofstream out(outputFile,ios::binary|ios::app);
+	int control = 0;
+	string linea,token;
+	string delimitador = ",";
+	size_t pos = 0;
+	vector<string> splitString;
+	vector<Campo> estructura;
+	while(in >> linea){
+		if(control == 0){
+			while ((pos = linea.find(delimitador)) != std::string::npos) {
+			    token = linea.substr(0, pos);
+			    splitString.push_back(token);
+			    linea.erase(0, pos + delimitador.length());
+			}
+			splitString.push_back(linea);
+			int fieldCount = splitString.size();
+			int available = 0;
+			out.write(reinterpret_cast<char*>(&fieldCount),sizeof(fieldCount));
+			out.write(reinterpret_cast<char*>(&available),sizeof(available));
+			for(int i = 0; i < splitString.size(); i++){
+				Campo campo;
+				campo.nombre = splitString.at(i);
+				if(i == 0){
+					campo.tipo = 2;
+					campo.isKey = true;
+					campo.longitud = 10;
+				}else{
+					campo.tipo = 2;
+					campo.isKey = false;
+					campo.longitud = 15;
+				}
+				out.write(reinterpret_cast<char*>(&campo),sizeof(campo));
+			}
+			control++;
+			splitString.clear();
+		}else{
+			while ((pos = linea.find(delimitador)) != std::string::npos) {
+			    token = linea.substr(0, pos);
+			    splitString.push_back(token);
+			    linea.erase(0, pos + delimitador.length());
+			}
+			splitString.push_back(linea);
+			for(int i = 0; i < splitString.size(); i++){
+				Informacion data;
+				data.value = 0;
+				data.texto = splitString.at(i);
+				out.write(reinterpret_cast<char*>(&data),sizeof(data));
+			}
+			splitString.clear();
+			control++;
+		}
+	}
+	in.close();
+	out.close();
 }
