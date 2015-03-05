@@ -96,10 +96,11 @@ int main(int argc, char*argv[]){
 		if(opcion == 2){
 			cout << "Ingrese el nombre del archivo donde quiere agregar un registro: ";
 			cin >> filename;
+			ofstream file2(filename,ios::binary|ios_base::app);
 			vector<int> availList = cargarAvailList(filename);
 			campos = cargarEstructura(filename);
 			/*Revisar el availlist */
-			if(availList.at(0) == 0){ //Si no hay posiciones
+			if(availList.at(0) == 0){ //Si no hay posiciones que agregue al final
 				info.clear();
 				string text;
 				int data;
@@ -124,7 +125,6 @@ int main(int argc, char*argv[]){
 					}
 				}
 				/*Escribe al final del archivo*/
-				ofstream file2(filename,ios::binary|ios_base::app);
 				const char* puntero = reinterpret_cast<const char*>(&info[0]);
 				size_t cantBytes = info.size() * sizeof(info[0]);
 				file2.write(puntero,cantBytes);
@@ -132,7 +132,7 @@ int main(int argc, char*argv[]){
 				info.clear();
 				file2.close();
 				
-			}else{ // Si hay posiciones disponibles
+			}else{ // Si hay posiciones disponibles,escribe en esa posicion especifica
 				info.clear();
 				string text;
 				int data;
@@ -183,55 +183,48 @@ int main(int argc, char*argv[]){
 		}
 
 		if(opcion == 4){
-			cout << "Ingrese nombre del archivo que quiere modificar registro: ";
+			cout << "Ingrese el nombre del archivo donde quiere modificar un registro: ";
 			cin >> filename;
-			int rrn = 0;
-			int offset = inicioRegistros(filename);
 			imprimir(filename);
+			campos = cargarEstructura(filename);
+			int rrn;
+			int control = 0;
+			string llave1,llave2;
 			cout << "Ingrese el numero de registro que quiere modificar: ";
 			cin >> rrn;
+			int offset = inicioRegistros(filename);
 			offset += (rrn-1)*campos.size()*sizeof(Informacion);
-
-				/*Leer del Archivo*/
-			ifstream file(filename,ios::binary |ios::in |ios::out);
-			file.seekg(offset,ios::beg);
-			vector<Informacion> infoRegistro;
+			ifstream in(filename,ios::binary);
+			in.seekg(offset,ios::beg);
 			Informacion data;
-			int control = 1;
+			vector<Informacion> info;
 			while(true){
 				if(control < campos.size()){
-					if(file.read(reinterpret_cast<char*>(&data),sizeof(data))){
-						infoRegistro.push_back(data);
-						control++;
-					} 
+					in.read(reinterpret_cast<char*>(&data),sizeof(data));
+					cout << campos.at(control).nombre<<": ";
+					if(campos.at(control).isKey){
+						llave1 = data.texto;
+					}
+					if(campos.at(control).tipo==1){
+						cin >> data.value;
+					}else{
+						cin >> data.texto;
+						if(campos.at(control).isKey){
+							llave2 = data.texto;
+						}
+					}
+					info.push_back(data);
 				} else if(control == campos.size()){
 					break;
 				}
+				control++;
 			}
-			file.close();
-
-				/*Modificar Datos*/
-			for(int i = 0; i < campos.size(); i++){
-				for(int j = 0; j < infoRegistro.size(); j++){
-					cout << campos.at(i).nombre << ": ";
-					if(campos.at(i).tipo == 1){
-						cin >> infoRegistro.at(j).value;
-					}
-					if(campos.at(i).tipo == 2){
-						cin >> infoRegistro.at(j).texto;
-					}
-				}
-				cout << endl;
-			}
-
-				/*Escribir al Archivo*/
-			ofstream file2(filename,ios::binary| ios::in|ios::out);
-			file2.seekp(offset,ios::beg);
-			const char* puntero = reinterpret_cast<const char*>(&infoRegistro[0]);
-			size_t cantBytes = infoRegistro.size() * sizeof(infoRegistro[0]);
-			file2.write(puntero,cantBytes);
-			file2.close();
-			cout << "Registro modificado!!"<<endl<<endl;
+			ofstream out(filename,ios::binary|ios::in|ios::out);
+			out.seekp(offset,ios::beg);
+			out.write(reinterpret_cast<char*>(&info[0]),info.size()*sizeof(info[0]));
+			out.close();
+			in.close();
+			cout << "Registro Modificado"<<endl;
 		}
 
 		if(opcion == 5){
@@ -516,7 +509,6 @@ int main(int argc, char*argv[]){
 					out.close();
 					in.close();
 				}
-
 				if(option == 3){
 					int rrn;
 					imprimir(filename);
@@ -586,7 +578,6 @@ int main(int argc, char*argv[]){
 						cout << endl;
 					}
 					cout << endl;
-
 				}
 				if(option == 5){
 					seguir = false;
