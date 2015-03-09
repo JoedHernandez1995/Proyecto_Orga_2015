@@ -15,6 +15,4 @@ int PrimaryKey::getOffset(){
 	return this->offset;
 }
 
-bool PrimaryKey::operator ==(const PrimaryKey& otro){
-	return this->llavePrimaria == otro.llavePrimaria;
-}
+
