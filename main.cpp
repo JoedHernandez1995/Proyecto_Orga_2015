@@ -649,7 +649,7 @@ int menuIndices(){
 void cargarIndices(string filename){
 	cout << endl;
 	ifstream file(filename,ios::binary);
-
+	ofstream file2("index_"+filename,ios::binary|ios_base::app);
 	int offset = inicioRegistros(filename);
 	file.seekg(offset,ios::beg);
 
@@ -658,6 +658,7 @@ void cargarIndices(string filename){
 	Informacion info1;
 	int control = 1;
 	int start = -1;
+	string llave;
 	while(true){
 		if(control <= campos.size()){
 			if(control == 1){
@@ -667,6 +668,9 @@ void cargarIndices(string filename){
 				info.push_back(info1);
 				if(campos.at(control-1).isKey){
 					indice.insert(pair<string,PrimaryKey*>(info.at(control-1).texto,new PrimaryKey(info.at(control-1).texto,start)));
+					llave = info.at(control-1).texto;
+					file2.write(reinterpret_cast<char*>(&llave),sizeof(llave));
+					file2.write(reinterpret_cast<char*>(&start),sizeof(start));
 				}
 				control++;
 			} else {
@@ -678,6 +682,7 @@ void cargarIndices(string filename){
 		}
 	}
 	file.close();
+	file2.close();
 }
 
 void imprimir(string filename){
