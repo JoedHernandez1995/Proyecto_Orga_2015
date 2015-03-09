@@ -258,57 +258,64 @@ int main(int argc, char*argv[]){
 
 		if(opcion == 6){
 
-			/*Cargamos registros no marcados a memoria*/
-			int begin,end,size;
-			int rrn = inicioRegistros(filename);
-			int offset = 0;
+			cout << "Ingrese el nombre del archivo que desea compactar: ";
+			cin >> filename;
+			ifstream file(filename,ios::binary);
+			ofstream file2("nuevo_"+filename,ios::binary|ios_base::app);
 
-							/*Leer del Archivo*/
-			ifstream file(filename,ios::binary |ios::in |ios::out);
-			begin = file.tellg();
-			file.seekg(0,ios::end);
-			end = file.tellg();
-			size = end-begin;
-			file.seekg(0,ios::beg);
-
-			int numData = size/sizeof(Informacion);
-
-
-			vector<Informacion> infoRegistro;
+			int offset = inicioRegistros(filename);
+			file.seekg(offset,ios::beg);
+			campos = cargarEstructura(filename); 
 			Informacion data;
+
+			int numero_Campos = campos.size();
+			int avail = 0;
+
+			/*Reescribimos el header*/
+			file2.write(reinterpret_cast<char*>(&numero_Campos),sizeof(numero_Campos));
+			file2.write(reinterpret_cast<char*>(&avail),sizeof(avail));
+			file2.write(reinterpret_cast<char*>(&campos[0]),sizeof(Campo)*campos.size());
+
 			int control = 1;
+			int numReg = 1;
+			char c;
+			int start;
 
 			while(true){
-				cout << rrn << endl;
-				if(rrn<numData){
-					offset += rrn*sizeof(Informacion);
-					char c;
-					file.seekg(offset,ios::beg);
-					file.get(c);
-					if(c != '&'){
-						if(file.read(reinterpret_cast<char*>(&data),sizeof(data))) {
-							infoRegistro.push_back(data);
+				if(control <= campos.size()){
+					start = file.tellg();
+					if(file.read(reinterpret_cast<char*>(&c),sizeof(c))){
+						if(c != '&'){
+							file.seekg(start,ios::beg);
+							if(file.read(reinterpret_cast<char*>(&data),sizeof(data))){
+								file2.write(reinterpret_cast<char*>(&data),sizeof(data));
+								control++;
+							} else {
+								break;
+							}
+						}else{
+							int control2 = 1;
+							file.seekg(start,ios::beg);
+							while(control2 <= campos.size()){
+								if(file.read(reinterpret_cast<char*>(&data),sizeof(data))){
+									control2++;
+								}
+							}
+							numReg++;
+							control = 1;
 						}
-						rrn++;
-					}else{
-						rrn = rrn+campos.size();
 					}
-				}else{
+				} else if(control > campos.size()){
+					control = 1;
+					numReg++;
+				}
+				if(file.eof()){
 					break;
 				}
 			}
 			file.close();
-			cout << infoRegistro.size() << endl;
-
-			/* Escribir Archivo Nuevo */
-			ofstream file2(filename,ios::binary);
-			const char* puntero = reinterpret_cast<const char*>(&infoRegistro[0]);
-			size_t cantBytes = infoRegistro.size() * sizeof(infoRegistro[0]);
-			file2.write(puntero,cantBytes);
 			file2.close();
-			cout << "NUEVO ARCHIVO CREADO"<<endl<<endl;
-
-
+			cout << "Nuevo Archivo creado!!"<<endl;
 		}
 
 		if(opcion == 7){
