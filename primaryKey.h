@@ -11,5 +11,5 @@ public:
 	PrimaryKey(string,int);
 	int getOffset();
 	string getLlave();
-	virtual bool operator ==(const PrimaryKey&);
 };
+
