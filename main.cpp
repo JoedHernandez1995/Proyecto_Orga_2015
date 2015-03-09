@@ -230,6 +230,7 @@ int main(int argc, char*argv[]){
 		if(opcion == 5){
 			cout << "Ingrese nombre del archivo donde quiere borrar un registro: ";
 			cin >> filename;
+			campos = cargarEstructura(filename);
 			int rrn;
 			char indicador = '&';
 			imprimir(filename);
@@ -376,6 +377,7 @@ int main(int argc, char*argv[]){
 			cout << "Ingrese el nombre del archivo que quiere usar indice lineal\n(este archivo usara para todas las operaciones): ";
 			cin >> filename;
 			cargarIndices(filename);
+			campos = cargarEstructura(filename);
 			bool seguir = true;
 			while(seguir){
 				int option = menuIndices();
@@ -511,15 +513,14 @@ int main(int argc, char*argv[]){
 				}
 				if(option == 3){
 					int rrn;
+					char indicador = '&';
 					imprimir(filename);
 					cout << "Ingrese el numero de registro que quiere borrar: ";
 					cin >> rrn;
 					int offset = inicioRegistros(filename);
 					offset += (rrn-1)*campos.size()*sizeof(Informacion);
-					ofstream out(filename, ios::in|ios::binary);
-					out.seekp(offset,ios::beg);
 
-					ifstream in(filename,ios::binary);
+					ifstream in(filename,ios::binary|ios::in);
 					in.seekg(offset,ios::beg);
 					int control = 0;
 					string key;
@@ -535,12 +536,21 @@ int main(int argc, char*argv[]){
 						}
 						control++;
 					}
-					out.put('&');
+
+					ofstream out(filename, ios::binary|ios::in|ios::out);
+					out.seekp(offset,ios::beg);
+					out.write(reinterpret_cast<char*>(&indicador),sizeof(indicador));
+					int first_avail;
+					in.seekg(sizeof(int),ios::beg);
+					in.read(reinterpret_cast<char*>(&first_avail),sizeof(first_avail));
+					cout << first_avail << endl;
+					out.write(reinterpret_cast<char*>(&first_avail),sizeof(first_avail));
+					out.seekp(sizeof(int),ios::beg);
+					out.write(reinterpret_cast<char*>(&rrn),sizeof(rrn));
 					out.close();
 					in.close();
 					indice.erase(key);
 					cout << "Registro borrado"<<endl;
-					imprimir(filename);
 				}
 				if(option == 4){
 					string llave;
@@ -675,13 +685,33 @@ void imprimir(string filename){
 	Informacion info1;
 	int control = 1;
 	int numReg = 1;
+	char c;
+	int start;
 	while(true){
 		if(control <= campos.size()){
-			if(file.read(reinterpret_cast<char*>(&info1),sizeof(info1))){
-				info.push_back(info1);
-				control++;
-			} else {
-				break;
+			start = file.tellg();
+			if(file.read(reinterpret_cast<char*>(&c),sizeof(c))){
+				if(c != '&'){
+					file.seekg(start,ios::beg);
+					if(file.read(reinterpret_cast<char*>(&info1),sizeof(info1))){
+						info.push_back(info1);
+						control++;
+					} else {
+						break;
+					}
+				}else{
+					int control2 = 1;
+					file.seekg(start,ios::beg);
+					while(control2 <= campos.size()){
+						if(file.read(reinterpret_cast<char*>(&info1),sizeof(info1))){
+							info.push_back(info1);
+							control2++;
+						}
+					}
+					info.clear();
+					numReg++;
+					control = 1;
+				}
 			}
 		} else if(control > campos.size()){
 			cout << "Registro #"<<numReg<<endl;
@@ -699,10 +729,14 @@ void imprimir(string filename){
 			control = 1;
 			numReg++;
 		}
+		if(file.eof()){
+			break;
+		}
 	}
 	file.close();
-	for (map<string,PrimaryKey*>::iterator it=indice.begin(); it!=indice.end(); it++)
-	    cout << it->first << " => " << it->second->getOffset() << '\n';
+
+	/*for (map<string,PrimaryKey*>::iterator it=indice.begin(); it!=indice.end(); it++)
+	    cout << it->first << " => " << it->second->getOffset() << '\n';*/
 }
 
 vector<Campo> cargarEstructura(string filename){
