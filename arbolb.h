@@ -1,7 +1,6 @@
 #pragma once
 #include "primaryKey.h"
-//#include "nodo.h"
-class Nodo;
+#include "nodo.h"
 #include <iostream>
 using namespace std;
 
