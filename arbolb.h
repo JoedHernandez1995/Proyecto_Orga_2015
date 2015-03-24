@@ -15,4 +15,6 @@ public:
 	void recorrer();
 	//Funcion para buscar una llave en este arbol
 	Nodo* buscar(PrimaryKey*);
+	//La funcion principal que agrega una nueva llave a este Arbol B
+	void insertar(PrimaryKey*);
 };
