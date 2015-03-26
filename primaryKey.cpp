@@ -15,4 +15,3 @@ int PrimaryKey::getOffset(){
 	return this->offset;
 }
 
-
