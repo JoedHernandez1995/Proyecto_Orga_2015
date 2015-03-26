@@ -295,7 +295,23 @@ int main(int argc, char*argv[]){
 
 		if(opcion == 3){
 			ifstream fileIsOpen(filename,ios::binary);
+			int useIndex,indexType;
 			if(fileIsOpen){
+				fileIsOpen.seekg(sizeof(int),ios::beg);
+				fileIsOpen.read(reinterpret_cast<char*>(&useIndex),sizeof(useIndex));
+				fileIsOpen.read(reinterpret_cast<char*>(&indexType),sizeof(useIndex));
+				if(useIndex==1){
+					if(indexType==1){
+						imprimir(filename);
+						cout << "Indice Lineal"<<endl;
+						for (map<string,PrimaryKey*>::iterator it=indice.begin(); it!=indice.end(); it++)
+						    cout << it->first << " => " << it->second->getOffset() << '\n';
+					}else (indexType==0){
+						imprimir(filename);
+						cout << "Arbol B Recorrido "<<endl;
+						btree.recorrer();
+					}
+				}
 				imprimir(filename);
 			}else{
 				cout << "No ha abierto un archivo valido" << endl;
@@ -699,7 +715,6 @@ int main(int argc, char*argv[]){
 				if(option == 4){
 					break;
 				}
-
 			}
 			btree.recorrer();
 		}
