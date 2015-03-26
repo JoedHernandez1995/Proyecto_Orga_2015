@@ -42,6 +42,8 @@ vector<int> cargarAvailList(string);
 vector<Campo> cargarEstructura(string);
 map<string,PrimaryKey*> indice;
 
+ArbolB btree(16);
+
 int main(int argc, char*argv[]){
 
 	int cantCampos;
@@ -56,10 +58,22 @@ int main(int argc, char*argv[]){
 	while(continuar){
 		int opcion = menu();
 		if(opcion == 1){
+			int usaIndice;
+			int tipoIndice;
 			cout << "Ingrese el nombre del archivo a abrir: ";
 			cin >> filename;
 			ifstream fileExists(filename,ios::binary);
 			if(fileExists){
+				fileExists.seekg(sizeof(int),ios::beg);
+				fileExists.read(reinterpret_cast<char*>(&usaIndice),sizeof(usaIndice));
+				fileExists.read(reinterpret_cast<char*>(&tipoIndice),sizeof(tipoIndice));
+				if(usaIndice == 1){
+					if(tipoIndice == 1){
+						cargarIndices(filename);
+					}else if(tipoIndice == 0){
+
+					}
+				}
 				cout << "Archivo Abierto!"<<endl;
 				fileExists.close();
 			}else{
@@ -77,8 +91,14 @@ int main(int argc, char*argv[]){
 					cout << "Ingrese nombre del campo: ";
 					cin >> camp.nombre;
 					if(numPrimaryKeys==0){
+						int llave;
 						cout << "Es llave primaria(1-Si/0-No): ";
-						cin >> camp.isKey;
+						cin >> llave;
+						if(llave==0){
+							camp.isKey = false;
+						}else if(llave==1){
+							camp.isKey = true;
+						}
 						if(!camp.isKey){
 							cout << "Ingrese tipo del campo(1-Int/2-Texto): ";
 							cin >> camp.tipo;
@@ -103,6 +123,7 @@ int main(int argc, char*argv[]){
 						} else {
 							camp.longitud = sizeof(int);
 						}
+						camp.isKey = false;
 					}
 					campos.push_back(camp);
 					cout << "Campo Creado!"<<endl;
@@ -120,9 +141,13 @@ int main(int argc, char*argv[]){
 				file.write(pointer, bytes);
 				file.close();
 				fileExists.close();
+				if(useIndex == 1){
+					if(indexType==1){
+						ofstream indexFile("index_"+filename,ios::binary|ios::app);
+						indexFile.close();
+					}
+				}
 				campos.clear();
-				cout << endl;
-				cout << "Estructura Guardada!!"<<endl;
 			}
 
 		}
@@ -171,8 +196,19 @@ int main(int argc, char*argv[]){
 						if(indexType==1){
 							start = ((int) file2.tellp()) - (campos.size()*sizeof(Informacion));//probablemente sumarle 1
 							indice.insert(pair<string,PrimaryKey*>(key,new PrimaryKey(key,start)));
-						}else if(indexType == 0){
+							string indexFile = "index_"+filename;
+							ofstream index(indexFile,ios::binary|ios::trunc);
+							index.close();
+							ofstream indice_file(indexFile,ios::binary|ios::app);
+							for (map<string,PrimaryKey*>::iterator it=indice.begin(); it!=indice.end(); it++){
+								string key = it->first;
+								int offset = it->second->getOffset();
+								indice_file.write(reinterpret_cast<char*>(&key),sizeof(key));
+								indice_file.write(reinterpret_cast<char*>(&offset),sizeof(offset));
+							}
 
+						}else if(indexType == 0){
+							btree.insertar(new PrimaryKey(key,start));
 						}
 					}
 					cout << "Registro Agregado"<<endl;
@@ -226,6 +262,26 @@ int main(int argc, char*argv[]){
 					file2.close();
 					archivo.close();
 
+					if(useIndex==1){
+						if(indexType==1){
+							start = ((int) file2.tellp()) - (campos.size()*sizeof(Informacion));//probablemente sumarle 1
+							indice.insert(pair<string,PrimaryKey*>(key,new PrimaryKey(key,start)));
+							string indexFile = "index_"+filename;
+							ofstream index(indexFile,ios::binary|ios::trunc);
+							index.close();
+							ofstream indice_file(indexFile,ios::binary|ios::app);
+							for (map<string,PrimaryKey*>::iterator it=indice.begin(); it!=indice.end(); it++){
+								string key = it->first;
+								int offset = it->second->getOffset();
+								indice_file.write(reinterpret_cast<char*>(&key),sizeof(key));
+								indice_file.write(reinterpret_cast<char*>(&offset),sizeof(offset));
+							}
+
+						}else if(indexType == 0){
+							btree.insertar(new PrimaryKey(key,start));
+						}
+					}
+
 					cout << "Registro Agregado!!"<<endl<<endl;
 					availList.erase(availList.begin()); //borra el primer elemento, ya se uso esa posicion;
 				}
@@ -245,82 +301,147 @@ int main(int argc, char*argv[]){
 		}
 
 		if(opcion == 4){
-			cargarIndices(filename);
-			campos = cargarEstructura(filename);
-			string llave;
-			cout << "Ingrese la llave primaria del registro que quiere modificar: ";
-			cin >> llave;
-			PrimaryKey* key = indice.find(llave)->second;
-			int offset = key->getOffset();
-			campos = cargarEstructura(filename);
-			int control = 0;
-			string llave1,llave2;
-			ifstream in(filename,ios::binary);
-			in.seekg(offset,ios::beg);
-			Informacion data;
-			vector<Informacion> info;
-			while(true){
-				if(control < campos.size()){
-					in.read(reinterpret_cast<char*>(&data),sizeof(data));
-					cout << campos.at(control).nombre<<": ";
-					if(campos.at(control).isKey){
-						llave1 = data.texto;
-					}
-					if(campos.at(control).tipo==1){
-						cin >> data.value;
-					}else{
-						cin >> data.texto;
-						if(campos.at(control).isKey){
-							llave2 = data.texto;
-						}
-					}
-					info.push_back(data);
-				} else if(control == campos.size()){
-					break;
+			ifstream file(filename,ios::binary);
+			if(file){
+				int useIndex,indexType;
+				file.seekg(sizeof(int),ios::beg);
+				file.read(reinterpret_cast<char*>(&useIndex),sizeof(useIndex));
+				file.read(reinterpret_cast<char*>(&indexType),sizeof(indexType));
+				if(useIndex == 0){
+					cargarIndices(filename);
 				}
-				control++;
+				campos = cargarEstructura(filename);
+				string llave;
+				cout << "Ingrese la llave primaria del registro que quiere modificar: ";
+				cin >> llave;
+				PrimaryKey* key = indice.find(llave)->second;
+				int offset = key->getOffset();
+				campos = cargarEstructura(filename);
+				int control = 0;
+				string llave1,llave2;
+				ifstream in(filename,ios::binary);
+				in.seekg(offset,ios::beg);
+				Informacion data;
+				vector<Informacion> info;
+				while(true){
+					if(control < campos.size()){
+						in.read(reinterpret_cast<char*>(&data),sizeof(data));
+						cout << campos.at(control).nombre<<": ";
+						if(campos.at(control).isKey){
+							llave1 = data.texto;
+						}
+						if(campos.at(control).tipo==1){
+							cin >> data.value;
+						}else{
+							cin >> data.texto;
+							if(campos.at(control).isKey){
+								llave2 = data.texto;
+							}
+						}
+						info.push_back(data);
+					} else if(control == campos.size()){
+						break;
+					}
+					control++;
+				}
+				indice.erase(llave1);
+				indice.insert(pair<string,PrimaryKey*>(llave2, new PrimaryKey(llave2,offset)));
+				ofstream out(filename,ios::binary|ios::in|ios::out);
+				out.seekp(offset,ios::beg);
+				out.write(reinterpret_cast<char*>(&info[0]),info.size()*sizeof(info[0]));
+				out.close();
+				in.close();
+				if(useIndex==1){
+					if(indexType==1){
+						string indexFile = "index_"+filename;
+						ofstream index(indexFile,ios::binary|ios::trunc);
+						index.close();
+						ofstream indice_file(indexFile,ios::binary|ios::app);
+						for (map<string,PrimaryKey*>::iterator it=indice.begin(); it!=indice.end(); it++){
+							string key = it->first;
+							int offset = it->second->getOffset();
+							indice_file.write(reinterpret_cast<char*>(&key),sizeof(key));
+							indice_file.write(reinterpret_cast<char*>(&offset),sizeof(offset));
+						}
+
+					}else if(indexType == 0){
+
+					}
+				}
+				cout << "Registro Modificado"<<endl;
+
+			}else{
+				cout << "No ha abierto un archivo valido"<<endl;
 			}
-			indice.erase(llave1);
-			indice.insert(pair<string,PrimaryKey*>(llave2, new PrimaryKey(llave2,offset)));
-			ofstream out(filename,ios::binary|ios::in|ios::out);
-			out.seekp(offset,ios::beg);
-			out.write(reinterpret_cast<char*>(&info[0]),info.size()*sizeof(info[0]));
-			out.close();
-			in.close();
-			cout << "Registro Modificado"<<endl;
+			file.close();
+	
 		}
 
 		if(opcion == 5){
-			cargarIndices(filename);
-			campos = cargarEstructura(filename);
-			string llave;
-			cout << "Ingrese la llave primaria del registro que quiere borrar: ";
-			cin >> llave;
+			ifstream file(filename,ios::binary);
+			if(file){
+				int useIndex,indexType;
+				file.seekg(sizeof(int),ios::beg);
+				file.read(reinterpret_cast<char*>(&useIndex),sizeof(useIndex));
+				file.read(reinterpret_cast<char*>(&indexType),sizeof(indexType));
 
-			PrimaryKey* key = indice.find(llave)->second;
-			int offset = key->getOffset();
-			char indicador = '&';
+				campos = cargarEstructura(filename);
+				if(useIndex == 0){
+					cargarIndices(filename);
+				}
+				string llave;
+				cout << "Ingrese la llave primaria del registro que quiere borrar: ";
+				cin >> llave;
 
-			int begin = sizeof(int) + sizeof(int) + sizeof (int) + sizeof(int) + (campos.size()*sizeof(Campo));
-			ofstream out(filename, ios::binary|ios::in|ios::out);
-			out.seekp(offset,ios::beg);
-			out.write(reinterpret_cast<char*>(&indicador),sizeof(indicador));
+				PrimaryKey* key = indice.find(llave)->second;
+				int original_offset;
+				int offset = key->getOffset();
+				char indicador = '&';
 
-			int first_avail;
-			ifstream in(filename,ios::binary|ios::in);
-			in.seekg(sizeof(int)+sizeof(int)+sizeof(int),ios::beg);
-			in.read(reinterpret_cast<char*>(&first_avail),sizeof(first_avail));
+				original_offset = offset;
 
-			offset = offset-begin;
+				int begin = sizeof(int) + sizeof(int) + sizeof (int) + sizeof(int) + (campos.size()*sizeof(Campo));
+				ofstream out(filename, ios::binary|ios::in|ios::out);
+				out.seekp(offset,ios::beg);
+				out.write(reinterpret_cast<char*>(&indicador),sizeof(indicador));
 
-			int rrn = offset/(campos.size()*sizeof(Informacion)) + 1;
-			cout << rrn<<endl;
-			out.write(reinterpret_cast<char*>(&first_avail),sizeof(first_avail));
-			out.seekp(sizeof(int)+sizeof(int)+sizeof(int),ios::beg);
-			out.write(reinterpret_cast<char*>(&rrn),sizeof(rrn));
-			out.close();
-			cout << "Registro borrado"<<endl;
-			indice.erase(llave);
+				int first_avail;
+				ifstream in(filename,ios::binary|ios::in);
+				in.seekg(sizeof(int)+sizeof(int)+sizeof(int),ios::beg);
+				in.read(reinterpret_cast<char*>(&first_avail),sizeof(first_avail));
+
+				offset = offset-begin;
+
+				int rrn = offset/(campos.size()*sizeof(Informacion)) + 1;
+				cout << rrn<<endl;
+				out.write(reinterpret_cast<char*>(&first_avail),sizeof(first_avail));
+				out.seekp(sizeof(int)+sizeof(int)+sizeof(int),ios::beg);
+				out.write(reinterpret_cast<char*>(&rrn),sizeof(rrn));
+				out.close();
+				cout << "Registro borrado"<<endl;
+				indice.erase(llave);
+				if(useIndex==1){
+					if(indexType==1){
+						string indexFile = "index_"+filename;
+						ofstream index(indexFile,ios::binary|ios::trunc);
+						index.close();
+						ofstream indice_file(indexFile,ios::binary|ios::app);
+						for (map<string,PrimaryKey*>::iterator it=indice.begin(); it!=indice.end(); it++){
+							string key = it->first;
+							int offset = it->second->getOffset();
+							indice_file.write(reinterpret_cast<char*>(&key),sizeof(key));
+							indice_file.write(reinterpret_cast<char*>(&offset),sizeof(offset));
+						}
+
+					}else if(indexType == 0){
+						//btree.borrar(new PrimaryKey(key,original_offset));
+					}
+				}
+
+			}else{
+				cout << "No ha abierto un archivo valido"<<endl;
+			}
+			file.close();
 		}
 
 		if(opcion == 6){
@@ -329,13 +450,12 @@ int main(int argc, char*argv[]){
 				string filename2 = "nuevo_"+filename;
 				ofstream file2(filename2,ios::binary|ios_base::app);
 
-				int offset = inicioRegistros(filename);
-				file.seekg(offset,ios::beg);
 				campos = cargarEstructura(filename); 
 				Informacion data;
 
 				int numero_Campos = campos.size();
-				int useIndex,indexType,avail; 
+				int useIndex,indexType,avail;
+
 				file.read(reinterpret_cast<char*>(&numero_Campos),sizeof(numero_Campos));
 				file.read(reinterpret_cast<char*>(&useIndex),sizeof(useIndex));
 				file.read(reinterpret_cast<char*>(&indexType),sizeof(indexType));
@@ -354,6 +474,9 @@ int main(int argc, char*argv[]){
 				int numReg = 1;
 				char c;
 				int start;
+
+				int offset = inicioRegistros(filename);
+				file.seekg(offset,ios::beg);
 
 				while(true){
 					if(control <= campos.size()){
@@ -396,11 +519,12 @@ int main(int argc, char*argv[]){
 				strcpy(temp,filename2.c_str());
 
 				remove(original);
-			//rename(temp,original);
+				rename(temp,original);
 
 			}else{
 				cout << "No ha abierto un archivo valido"<<endl;
 			}
+			file.close();
 
 		}
 
@@ -408,7 +532,6 @@ int main(int argc, char*argv[]){
 			string llave;
 			ifstream file(filename,ios::binary);
 			if(file){
-				cargarIndices(filename);
 				cout << "Ingrese la llave primaria del registro que quiere buscar: ";
 				cin >> llave;
 
@@ -439,23 +562,12 @@ int main(int argc, char*argv[]){
 			}else{
 				cout << "No ha abierto un archivo valido"<<endl;
 			}
+			file.close();
 
 		}
 
 		if(opcion == 8){
-			cargarIndices(filename);
-			ArbolB arbol(16);
-			for (map<string,PrimaryKey*>::iterator it=indice.begin(); it!=indice.end(); it++)
-				arbol.insertar(it->second);
-			arbol.recorrer();
-			PrimaryKey* key = new PrimaryKey("30000",91234);
-			if(arbol.buscar(key) != NULL){
-				cout << "Encontre la Llave!"<<endl;
-			}else{
-				cout << "No Encontre La Llave"<<endl;
-			}
-
-
+			btree.recorrer();
 		}
 		if(opcion == 9){
 			cout << "Ingrese el nombre del archivo de texto: ";
@@ -479,7 +591,7 @@ int menu(){
 	cout << "5 - Borrar Registro"<<endl;
 	cout << "6 - Compactar"<<endl;
 	cout << "7 - Buscar"<<endl;
-	cout << "8 - Usar Indice Lineal" << endl;
+	cout << "8 - Cruzar Archivo" << endl;
 	cout << "9 - Convertir un archivo de texto a binario"<<endl;
 	cout << "10 - Salir"<<endl;
 	cout << "Ingrese opcion: ";
@@ -489,12 +601,10 @@ int menu(){
 
 int menuIndices(){
 	int opcion;
-	cout << "1 - Agregar registro usando Indice Lineal"<<endl;
-	cout << "2 - Modificar registro usando Indice Lineal"<<endl;
-	cout << "3 - Eliminar Registro usando Indice Lineal"<<endl;
-	cout << "4 - Buscar usando indice Lineal"<<endl;
-	cout << "5 - Desactivar indice lineal"<<endl;
-	cout << "Ingrese opcion: ";
+	cout << "1 - Cruzar Sin Indices"<<endl;
+	cout << "2 - Cruzar Con Indice Lineal"<<endl;
+	cout << "3 - Cruzar usando Arbol B"<<endl;
+	cout << "Ingrese Opcion: ";
 	cin >> opcion;
 	return opcion;
 }
@@ -502,7 +612,13 @@ int menuIndices(){
 void cargarIndices(string filename){
 	indice.clear();
 	cout << endl;
+	string indexFileName = "index_"+filename;
 	ifstream file(filename,ios::binary);
+	int useIndex,indexType;
+	file.seekg(sizeof(int),ios::beg);
+	file.read(reinterpret_cast<char*>(useIndex),sizeof(useIndex));
+	file.read(reinterpret_cast<char*>(indexType),sizeof(indexType));
+	ifstream fileExists(indexFileName,ios::binary);
 	int offset = inicioRegistros(filename);
 	file.seekg(offset,ios::beg);
 	vector<Informacion> info;
@@ -534,6 +650,31 @@ void cargarIndices(string filename){
 		}
 	}
 	file.close();
+	if(useIndex == 1){
+		if(indexType == 1){
+			if(fileExists){
+				ofstream borrar(indexFileName,ios::binary|ios::trunc);
+				borrar.close();
+				ofstream file2(indexFileName,ios::binary|ios::app);
+				for (map<string,PrimaryKey*>::iterator it=indice.begin(); it!=indice.end(); it++){
+					string key = it->first;
+					int offset = it->second->getOffset();
+					file2.write(reinterpret_cast<char*>(&key),sizeof(key));
+					file2.write(reinterpret_cast<char*>(&offset),sizeof(offset));
+				}
+				file2.close();
+			}else{
+				ofstream file2(indexFileName,ios::binary|ios_base::app);
+				for (map<string,PrimaryKey*>::iterator it=indice.begin(); it!=indice.end(); it++){
+					string key = it->first;
+					int offset = it->second->getOffset();
+					file2.write(reinterpret_cast<char*>(&key),sizeof(key));
+					file2.write(reinterpret_cast<char*>(&offset),sizeof(offset));
+				}
+				file2.close();
+			}
+		}
+	}
 }
 
 void imprimir(string filename){
@@ -666,7 +807,6 @@ vector<int> cargarAvailList(string filename){
 		}
 		file.close();
 		return posiciones;
-
 	}
 }
 
