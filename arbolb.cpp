@@ -51,3 +51,28 @@ void ArbolB::insertar(PrimaryKey* key){
 		}
 	}
 }
+
+void ArbolB::borrar(PrimaryKey* key){
+	if(!raiz){
+		cout << "El arbol esta vacio"<<endl;
+		return;
+	}
+
+	//Llamar la funcion borrar para la raiz
+	raiz->borrar(key);
+
+	//Si el nodo raiz tiene 0 llaves, hacemos el primer hijo
+	//como la raiz. Si tiene un hijo, entonces ponemos la raiz como
+	//NULL
+	if(raiz->numLlaves == 0){
+		Nodo* temp = raiz;
+		if(raiz->isLeaf){
+			raiz = NULL;
+		}else{
+			raiz = raiz->hijos[0];
+		}
+		//Liberamos la vieja raiz
+		delete temp;
+	}
+	return;
+}
