@@ -17,4 +17,6 @@ public:
 	Nodo* buscar(PrimaryKey*);
 	//La funcion principal que agrega una nueva llave a este Arbol B
 	void insertar(PrimaryKey*);
+	//La funcion principal que borra una llave del Arbol B
+	void borrar(PrimaryKey*);
 };
