@@ -311,8 +311,9 @@ int main(int argc, char*argv[]){
 						cout << "Arbol B Recorrido "<<endl;
 						btree.recorrer();
 					}
+				}else if(useIndex==0){
+					imprimir(filename);
 				}
-				imprimir(filename);
 			}else{
 				cout << "No ha abierto un archivo valido" << endl;
 			}
