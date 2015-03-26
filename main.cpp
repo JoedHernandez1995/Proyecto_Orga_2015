@@ -32,7 +32,7 @@ struct Registro{
 
 
 int menu();
-int menuIndices();
+int menuCruzar();
 void cargarIndices(string);
 void imprimir(string);
 void text2bin(string);
@@ -71,7 +71,8 @@ int main(int argc, char*argv[]){
 					if(tipoIndice == 1){
 						cargarIndices(filename);
 					}else if(tipoIndice == 0){
-
+						cargarIndices(filename);
+						btree.recorrer();
 					}
 				}
 				cout << "Archivo Abierto!"<<endl;
@@ -149,6 +150,7 @@ int main(int argc, char*argv[]){
 				}
 				campos.clear();
 			}
+			numPrimaryKeys = 0;
 
 		}
 
@@ -365,7 +367,11 @@ int main(int argc, char*argv[]){
 						}
 
 					}else if(indexType == 0){
-
+						ArbolB arbol(16);
+						for (map<string,PrimaryKey*>::iterator it=indice.begin(); it!=indice.end(); it++){
+							arbol.insertar(it->second);
+						}
+						btree = arbol;
 					}
 				}
 				cout << "Registro Modificado"<<endl;
@@ -434,6 +440,11 @@ int main(int argc, char*argv[]){
 						}
 
 					}else if(indexType == 0){
+						ArbolB arbol(16);
+						for (map<string,PrimaryKey*>::iterator it=indice.begin(); it!=indice.end(); it++){
+							arbol.insertar(it->second);
+						}
+						btree = arbol;
 						//btree.borrar(new PrimaryKey(key,original_offset));
 					}
 				}
@@ -532,6 +543,13 @@ int main(int argc, char*argv[]){
 			string llave;
 			ifstream file(filename,ios::binary);
 			if(file){
+				int useIndex,indexType;
+				file.seekg(sizeof(int),ios::beg);
+				file.read(reinterpret_cast<char*>(&useIndex),sizeof(useIndex));
+				file.read(reinterpret_cast<char*>(&indexType),sizeof(indexType));
+				if(useIndex == 0){
+					cargarIndices(filename);
+				}
 				cout << "Ingrese la llave primaria del registro que quiere buscar: ";
 				cin >> llave;
 
@@ -567,6 +585,122 @@ int main(int argc, char*argv[]){
 		}
 
 		if(opcion == 8){
+			while(true){
+				int option = menuCruzar();
+				if(option == 1){
+					string filename1,filename2;
+					cout << "Ingrese el nombre del primer archivo: ";
+					cin >> filename1;
+					cout << "Ingrese el nombre del segundo archivo: ";
+					cin >> filename2;
+					ifstream archivo1(filename1,ios::binary);
+					ifstream archivo2(filename2,ios::binary);
+					if(archivo1 && archivo2){
+
+						vector<Campo> estructura1 = cargarEstructura(filename1);
+						vector<Campo> estructura2 = cargarEstructura(filename2);
+
+						vector<int> seleccion1;
+						vector<int> seleccion2;
+
+						cout << "Seleccione los campos del archivo 1: "<<endl;
+						for(int i = 0; i < estructura1.size(); i++){
+							if(estructura1.at(i).isKey){
+								cout << i+1<<" - *"<<estructura1.at(i).nombre<<endl;
+							}else{
+								cout << i+1<<" - "<<estructura1.at(i).nombre<<endl;
+							}
+						}
+						int fields = 0;
+						int llavePrimaria = 0;
+						int selection,continuar;
+						while(fields <= estructura1.size()){
+							cout << "Campo a seleccionar: ";
+							cin >> selection;
+							seleccion1.push_back(selection-1);
+							cout << "Desea agregar otro campo? (1-Si/0-No): ";
+							cin >> continuar;
+							if(continuar == 0){
+								break;
+							}else{
+								fields++;
+							}
+						}
+
+						cout << "Seleccione los campos del archivo 2: "<<endl;
+						for(int i = 0; i < estructura2.size(); i++){
+							if(estructura2.at(i).isKey){
+								cout << i+1<<" - *"<<estructura2.at(i).nombre<<endl;
+							}else{
+								cout << i+1<<" - "<<estructura2.at(i).nombre<<endl;
+							}
+						}
+						fields = 0;
+						while(fields <= estructura2.size()){
+							cout << "Campo a seleccionar: ";
+							cin >> selection;
+							seleccion2.push_back(selection-1);
+							cout << "Desea agregar otro campo? (1-Si/0-No): ";
+							cin >> continuar;
+							if(continuar == 0){
+								break;
+							}else{
+								fields++;
+							}
+						}
+						string newFileName;
+						cout << "Ingrese el nombre del nuevo archivo: ";
+						cin >> newFileName;
+						int useIndex,indexType;
+						cout << "Desea utilizar indices con este nuevo archivo?: (1-Si/0-No)";
+						cin >> useIndex;
+						if(useIndex == 1){
+							cout << "Que tipo de indice le gustaria usar? (1-Lineal/0-ArbolB): ";
+							cin >> indexType;
+						}
+						ofstream newFile(newFileName,ios::binary|ios_base::app);
+						int totalFields = seleccion1.size()+seleccion2.size();
+						int disponible = 0;
+						newFile.write(reinterpret_cast<char*>(&totalFields),sizeof(totalFields));
+						newFile.write(reinterpret_cast<char*>(&useIndex),sizeof(useIndex));
+						newFile.write(reinterpret_cast<char*>(&indexType),sizeof(indexType));
+						newFile.write(reinterpret_cast<char*>(&disponible),sizeof(disponible));
+						Campo data;
+						for(int i = 0; i < estructura1.size(); i++){
+							for(int j = 0; j < seleccion1.size(); j++){
+								if(i == seleccion1.at(j)){
+									data = estructura1.at(i);
+									newFile.write(reinterpret_cast<char*>(&data),sizeof(data));
+								}
+							}
+						}
+						for(int i = 0; i < estructura2.size(); i++){
+							for(int j = 0; j < seleccion2.size(); j++){
+								if(i == seleccion2.at(j)){
+									data = estructura2.at(i);
+									newFile.write(reinterpret_cast<char*>(&data),sizeof(data));
+								}
+							}
+						}
+
+					}else{
+						cout << "Uno o ambos archivos no existen"<<endl;
+					}
+				}
+
+				if(option == 2){
+
+				}
+
+				if(option == 3){
+
+				}
+
+				if(option == 4){
+					break;
+				}
+
+			}
 			btree.recorrer();
 		}
 		if(opcion == 9){
@@ -599,11 +733,12 @@ int menu(){
 	return opcion;
 }
 
-int menuIndices(){
+int menuCruzar(){
 	int opcion;
 	cout << "1 - Cruzar Sin Indices"<<endl;
 	cout << "2 - Cruzar Con Indice Lineal"<<endl;
 	cout << "3 - Cruzar usando Arbol B"<<endl;
+	cout << "4 - Salir: "<<endl;
 	cout << "Ingrese Opcion: ";
 	cin >> opcion;
 	return opcion;
@@ -611,13 +746,13 @@ int menuIndices(){
 
 void cargarIndices(string filename){
 	indice.clear();
-	cout << endl;
 	string indexFileName = "index_"+filename;
 	ifstream file(filename,ios::binary);
 	int useIndex,indexType;
 	file.seekg(sizeof(int),ios::beg);
-	file.read(reinterpret_cast<char*>(useIndex),sizeof(useIndex));
-	file.read(reinterpret_cast<char*>(indexType),sizeof(indexType));
+	file.read(reinterpret_cast<char*>(&useIndex),sizeof(useIndex));
+	file.read(reinterpret_cast<char*>(&indexType),sizeof(indexType));
+
 	ifstream fileExists(indexFileName,ios::binary);
 	int offset = inicioRegistros(filename);
 	file.seekg(offset,ios::beg);
@@ -673,6 +808,13 @@ void cargarIndices(string filename){
 				}
 				file2.close();
 			}
+		}else if(indexType == 0){
+			ArbolB arbol(16);
+			for (map<string,PrimaryKey*>::iterator it=indice.begin(); it!=indice.end(); it++){
+				arbol.insertar(it->second);
+			}
+			btree = arbol;
+			cout << "Termine de agregar al arbol"<<endl;
 		}
 	}
 }
